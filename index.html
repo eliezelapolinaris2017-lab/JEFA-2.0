@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Visor de Citas — Salon Pro</title>
 <meta name="theme-color" content="#0f0f12">
+
+<!-- SheetJS para Excel (.xlsx) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <style>
 /* =========================
 THEME (editable en Config)
@@ -393,7 +397,7 @@ function renderCitas(){
        <button class="btn-ghost" onclick="citaWA('${c.id}')">WA</button>
      </td>
    </tr>
- ").join('');
+ `).join('');
 }
 function citaWA(id){
  const cfg=load(K.CFG,{});
@@ -537,15 +541,63 @@ function exportFacturasPDFPorTecnica(){
  const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.focus(); w.print();
 }
 function exportFacturasExcel(){
- // Export simple en CSV (compatible Excel). Si quieres SheetJS, puedo añadírtelo luego.
  const {rows, total} = facturasFiltradasPorTecnicaYRango();
- let csv = 'Fecha,Número,Técnica,Cliente,Servicio,Método,Monto\n';
- rows.forEach(f=>{
-   csv += `${f.fecha||''},${f.numero||''},"${(f.emp ? (empName(f.emp)||'') : (f.tecnicaNombre||'')).replace(/"/g,'""')}",`+
-          `"${(f.cliente||'').replace(/"/g,'""')}","${(f.servicio||'').replace(/"/g,'""')}",${f.metodo||''},${Number(f.monto||0).toFixed(2)}\n`;
+
+ // Construir data para la hoja (incluye encabezados)
+ const headers = ["Fecha","Número","Técnica","Cliente","Servicio","Método","Monto"];
+ const data = [headers];
+
+ rows.forEach(f => {
+   const tecnica = f.emp ? (empName(f.emp)||'') : (f.tecnicaNombre||'');
+   data.push([
+     f.fecha || "",
+     f.numero || "",
+     tecnica,
+     f.cliente || "",
+     f.servicio || "",
+     f.metodo || "",
+     Number(f.monto || 0)
+   ]);
  });
- csv += `,,,,,TOTAL,${Number(total||0).toFixed(2)}\n`;
- download(`FACTURAS_${todayISO()}.csv`, csv, 'text/csv');
+
+ // Fila de TOTAL al final
+ data.push(["","","","","","TOTAL", Number(total||0)]);
+
+ // Crear hoja
+ const ws = XLSX.utils.aoa_to_sheet(data);
+
+ // Ajustar ancho de columnas
+ ws["!cols"] = [
+   {wch: 12}, // Fecha
+   {wch: 10}, // Número
+   {wch: 16}, // Técnica
+   {wch: 18}, // Cliente
+   {wch: 18}, // Servicio
+   {wch: 12}, // Método
+   {wch: 12}  // Monto
+ ];
+
+ // Formato moneda para columna G
+ const currencyFmt = '"$"#,##0.00;[Red]-"$"#,##0.00';
+ const startRow = 2;                       // 1-based (fila siguiente a encabezado)
+ const endRow   = rows.length + 1;         // última fila de datos
+ for (let r = startRow; r <= endRow + 1; r++){ // +1 para incluir TOTAL
+   const cellRef = XLSX.utils.encode_cell({r: r-1, c: 6}); // 0-based
+   if (ws[cellRef]) {
+     ws[cellRef].t = 'n';
+     ws[cellRef].z = currencyFmt;
+   }
+ }
+
+ // Auto-filtro
+ const range = XLSX.utils.decode_range(ws['!ref']);
+ ws['!autofilter'] = { ref: XLSX.utils.encode_range({r:0,c:0},{r:range.e.r-1,c:range.e.c}) };
+
+ // Libro y descarga
+ const wb = XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb, ws, "Facturas");
+ const fileName = `FACTURAS_${todayISO()}.xlsx`;
+ XLSX.writeFile(wb, fileName);
 }
 
 /* =============== WhatsApp masivo =============== */
@@ -703,42 +755,42 @@ function init(){
  $$('.tab').forEach(b=> b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
 
  // Acciones Citas
- byId('vc_aplicar').addEventListener('click', renderCitas);
- byId('vc_limpiar').addEventListener('click', ()=>{
+ byId('vc_aplicar')?.addEventListener('click', renderCitas);
+ byId('vc_limpiar')?.addEventListener('click', ()=>{
    byId('vc_nombre').value=''; byId('vc_emp').value=''; byId('vc_desde').value=''; byId('vc_hasta').value='';
    renderCitas();
  });
- byId('vc_csv').addEventListener('click', visorCSV);
- byId('vc_pdf').addEventListener('click', visorPDF);
- byId('vc_wa_bulk').addEventListener('click', visorWABulk);
- byId('waClose').addEventListener('click', ()=>byId('waModal').classList.add('hidden'));
+ byId('vc_csv')?.addEventListener('click', visorCSV);
+ byId('vc_pdf')?.addEventListener('click', visorPDF);
+ byId('vc_wa_bulk')?.addEventListener('click', visorWABulk);
+ byId('waClose')?.addEventListener('click', ()=>byId('waModal').classList.add('hidden'));
 
  // Facturas (PDF/Excel) — con TOTAL GENERAL
- byId('fac_pdf_total').addEventListener('click', exportFacturasPDFPorTecnica);
- byId('fac_excel_total').addEventListener('click', exportFacturasExcel);
+ byId('fac_pdf_total')?.addEventListener('click', exportFacturasPDFPorTecnica);
+ byId('fac_excel_total')?.addEventListener('click', exportFacturasExcel);
 
  // Suplidores
- byId('sup_add').addEventListener('click', supAdd);
- byId('sup_csv').addEventListener('click', supCSV);
- byId('sup_pdf').addEventListener('click', supPDF);
+ byId('sup_add')?.addEventListener('click', supAdd);
+ byId('sup_csv')?.addEventListener('click', supCSV);
+ byId('sup_pdf')?.addEventListener('click', supPDF);
 
  // Print
- byId('btnPrint').addEventListener('click', ()=>window.print());
+ byId('btnPrint')?.addEventListener('click', ()=>window.print());
 
  // Config
- byId('cfg_logo').addEventListener('change', onLogoChanged);
- byId('cfg_bg').addEventListener('change', onBGChanged);
- byId('cfg_primary').addEventListener('change', onCfgSaveColors);
- byId('cfg_accent').addEventListener('change', onCfgSaveColors);
- byId('cfg_bg_op').addEventListener('change', onCfgSaveColors);
- byId('cfg_name').addEventListener('change', onCfgSaveColors);
- byId('cfg_sub').addEventListener('change', onCfgSaveColors);
+ byId('cfg_logo')?.addEventListener('change', onLogoChanged);
+ byId('cfg_bg')?.addEventListener('change', onBGChanged);
+ byId('cfg_primary')?.addEventListener('change', onCfgSaveColors);
+ byId('cfg_accent')?.addEventListener('change', onCfgSaveColors);
+ byId('cfg_bg_op')?.addEventListener('change', onCfgSaveColors);
+ byId('cfg_name')?.addEventListener('change', onCfgSaveColors);
+ byId('cfg_sub')?.addEventListener('change', onCfgSaveColors);
 
  // Backup
- byId('bk_export').addEventListener('click', exportBackup);
- byId('bk_import').addEventListener('change', e=> e.target.files[0] && importBackup(e.target.files[0]));
+ byId('bk_export')?.addEventListener('click', exportBackup);
+ byId('bk_import')?.addEventListener('change', e=> e.target.files[0] && importBackup(e.target.files[0]));
 }
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', ()=>{ try{ init(); } catch(e){ console.error(e); alert('Error inicializando la app'); }});
 </script>
 </body>
 </html>
