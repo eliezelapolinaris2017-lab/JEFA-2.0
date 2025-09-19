@@ -7,26 +7,15 @@
 <meta name="theme-color" content="#0f0f12">
 <style>
 /* =========================
-  THEME (editable en Config)
-  ========================= */
+THEME (editable en Config)
+========================= */
 :root{
- --bg:#0f0f12;
- --fg:#ffffff;
- --muted:#a7a7b1;
- --primary:#6ee7b7;
- --accent:#93c5fd;
- --danger:#ef4444;
- --warn:#f59e0b;
- --card:#171821;
- --card-2:#1e202b;
- --topbar:#11121a;
- --footer:#0c0d12;
- --btn:#24263a;
- --outline:#2a2d40;
- --shadow:0 10px 30px rgba(0,0,0,.35);
- --radius:16px;
+ --bg:#0f0f12; --fg:#ffffff; --muted:#a7a7b1;
+ --primary:#6ee7b7; --accent:#93c5fd; --danger:#ef4444; --warn:#f59e0b;
+ --card:#171821; --card-2:#1e202b; --topbar:#11121a; --footer:#0c0d12;
+ --btn:#24263a; --outline:#2a2d40; --shadow:0 10px 30px rgba(0,0,0,.35);
+ --radius:16px; --bg-opacity:1;
  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Inter, Roboto, "Helvetica Neue", Arial;
- --bg-opacity:1;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -39,7 +28,7 @@ body{
 a{color:inherit; text-decoration:none}
 button{cursor:pointer; border:0; background:var(--btn); color:#fff; border-radius:12px; padding:.7rem .95rem; box-shadow:var(--shadow); transition:.15s}
 button:hover{transform:translateY(-1px)}
-.btn-primary{background:linear-gradient(135deg,var(--primary),var(--accent))}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--accent)); color:#0a0a0a; font-weight:700}
 .btn-danger{background:linear-gradient(135deg,var(--danger),#b91c1c)}
 .btn-ghost{background:transparent; border:1px solid var(--outline)}
 .input, select, textarea{
@@ -149,14 +138,17 @@ hr.sep{border:0; height:1px; background:linear-gradient(90deg, transparent, #283
          <button id="vc_limpiar" class="btn-ghost">Limpiar</button>
          <button id="vc_csv" class="btn-ghost no-print">Exportar CSV</button>
          <button id="vc_pdf" class="btn-ghost no-print">Exportar PDF</button>
+         <button id="fac_pdf_total" class="btn-ghost no-print" title="Facturas por técnica">PDF Facturas (TOTAL)</button>
+         <button id="fac_excel_total" class="btn-ghost no-print" title="Excel Facturas">Excel Facturas</button>
          <button id="vc_wa_bulk" class="btn-primary no-print">WhatsApp masivo</button>
        </div>
      </div>
    </div>
 
    <div class="card" style="margin-top:1rem">
-     <div class="toolbar">
+     <div class="row" style="align-items:center">
        <b>Resultados</b>
+       <span class="badge right">Registros: <span id="badgeCitas">0</span></span>
      </div>
      <table class="table" id="tblVisor">
        <thead>
@@ -168,7 +160,8 @@ hr.sep{border:0; height:1px; background:linear-gradient(90deg, transparent, #283
      </table>
    </div>
  </section>
-  <!-- SUPLIDORES -->
+
+ <!-- SUPLIDORES -->
  <section id="sec-suplidores" class="section">
    <div class="card">
      <div class="row cols-4">
@@ -256,10 +249,11 @@ hr.sep{border:0; height:1px; background:linear-gradient(90deg, transparent, #283
  <div class="small help">Haz clic en cada enlace para abrir WhatsApp con el mensaje prellenado.</div>
  <div id="waLinks" style="margin-top:.6rem; max-height:300px; overflow:auto"></div>
 </div>
+
 <script>
 /* =========================
-  Base / Keys compartidas
-  ========================= */
+ Base / Keys compartidas
+========================= */
 const K={
  USERS:'sp_users',
  SESSION:'sp_session',
@@ -269,7 +263,7 @@ const K={
  CFG:'sp_config',
  SVC:'sp_servicios',
  COUNTER_F:'sp_fact_counter',
- SUP:'sp_suplidores' // nuevo
+ SUP:'sp_suplidores'
 };
 
 const $ = s => document.querySelector(s);
@@ -297,11 +291,20 @@ const download=(filename, content, type='text/plain')=>{
  });
  if(!load(K.EMP)) save(K.EMP,[
    {id:uuid(), nombre:'Cynthia', tel:'', activo:1},
-   {id:uuid(), nombre:'María', tel:'', activo:1}
+   {id:uuid(), nombre:'María', tel:'', activo:1},
+   {id:uuid(), nombre:'Paola', tel:'', activo:1}
  ]);
- if(!load(K.CITAS)) save(K.CITAS,[]);
+ if(!load(K.CITAS)) save(K.CITAS,[
+   // Ejemplos (agrega los tuyos desde tu app de agenda)
+   {id:uuid(), fecha:todayISO(), hora:'09:00', nombre:'Ana', emp:load(K.EMP,[])[0].id, srv:'Color', tel:'7870000001', notas:'', monto:65},
+   {id:uuid(), fecha:todayISO(), hora:'11:00', nombre:'Luz', emp:load(K.EMP,[])[0].id, srv:'Corte', tel:'7870000002', notas:'', monto:25}
+ ]);
  if(!load(K.SUP)) save(K.SUP,[]);
- if(!load(K.FACTS)) save(K.FACTS,[]);
+ if(!load(K.FACTS)) save(K.FACTS,[
+   // FACTURAS de ejemplo
+   {fecha:todayISO(), emp:load(K.EMP,[])[0].id, tecnicaNombre:'Cynthia', numero:'F-001', cliente:'Ana', servicio:'Color', metodo:'ATH', monto:65},
+   {fecha:todayISO(), emp:load(K.EMP,[])[0].id, tecnicaNombre:'Cynthia', numero:'F-002', cliente:'Luz', servicio:'Corte', metodo:'EFECTIVO', monto:25}
+ ]);
 })();
 
 /* =============== BRAND / TEMA =============== */
@@ -333,7 +336,7 @@ function applyBrand(){
  byId('cfg_bg_op').value   = cfg.bgOpacity??1;
 }
 
-/* =============== UI BÁSICA =============== */
+/* =============== UI / TABS =============== */
 function switchTab(id){
  $$('.tab').forEach(b=> b.classList.toggle('active', b.dataset.tab===id));
  $$('.section').forEach(s=> s.classList.toggle('active', s.id===id));
@@ -349,6 +352,14 @@ function renderEmpSelect(){
    emps.filter(onlyActive).map(e=>`<option value="${e.id}">${nameOf(e)}</option>`).join('');
 }
 
+/* =============== HELPERS DE FECHA =============== */
+function validISO(d){ return /^\d{4}-\d{2}-\d{2}$/.test(d||''); }
+function between(d, desde, hasta){
+ if(desde && validISO(desde) && d < desde) return false;
+ if(hasta && validISO(hasta) && d > hasta) return false;
+ return true;
+}
+
 /* =============== CITAS =============== */
 function empName(id){
  const e=(load(K.EMP,[]).find(x=>x.id===id)||{});
@@ -362,14 +373,14 @@ function citasFiltradas(){
  let arr = load(K.CITAS,[]);
  if(nombre) arr = arr.filter(c => (c.nombre||'').toLowerCase().includes(nombre));
  if(emp) arr = arr.filter(c => c.emp===emp);
- if(d) arr = arr.filter(c => c.fecha>=d);
- if(h) arr = arr.filter(c => c.fecha<=h);
+ if(d || h) arr = arr.filter(c => between(c.fecha||'', d, h));
  arr.sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora));
  return arr;
 }
 function renderCitas(){
  const tb=byId('tblVisor').querySelector('tbody');
  const rows = citasFiltradas();
+ byId('badgeCitas').textContent = rows.length;
  tb.innerHTML = rows.map(c=>`
    <tr class="tr">
      <td>${c.fecha||''}</td>
@@ -382,7 +393,7 @@ function renderCitas(){
        <button class="btn-ghost" onclick="citaWA('${c.id}')">WA</button>
      </td>
    </tr>
- `).join('');
+ ").join('');
 }
 function citaWA(id){
  const cfg=load(K.CFG,{});
@@ -396,6 +407,7 @@ function citaWA(id){
    `¡Gracias!`
  );
  const phone = (c.tel || cfg.waPhone || '').replace(/\D/g,'');
+ if(!phone){ alert('No hay teléfono válido.'); return; }
  window.open(`https://wa.me/${phone}?text=${msg}`,'_blank');
 }
 function visorCSV(){
@@ -434,7 +446,109 @@ function visorPDF(){
  const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.focus(); w.print();
 }
 
-/* WhatsApp masivo: genera enlaces clicables */
+/* =============== FACTURAS (desde K.FACTS) =============== */
+function getRangoActual(){
+ return {desde: byId('vc_desde').value || '', hasta: byId('vc_hasta').value || ''};
+}
+function facturasFiltradasPorTecnicaYRango(){
+ const empId = byId('vc_emp').value; // vacío = todas
+ const {desde, hasta} = getRangoActual();
+ let arr = load(K.FACTS, []);
+
+ // Normaliza campos comunes
+ arr = arr.map(f => ({
+   fecha: f.fecha || f.date || '',
+   emp:   f.emp || f.empleadoId || f.tecnicaId || '',
+   tecnicaNombre: f.tecnicaNombre || f.tecnica || '',
+   numero: f.numero || f.no || f.ncf || '',
+   cliente: f.cliente || f.nombre || '',
+   servicio: f.servicio || f.srv || '',
+   metodo: f.metodo || f.met || f.payment || '',
+   monto: Number(f.monto || f.total || f.importe || 0)
+ }));
+
+ if (empId){
+   arr = arr.filter(f => (f.emp && f.emp === empId) || (!f.emp && f.tecnicaNombre && f.tecnicaNombre === empName(empId)));
+ }
+ if (desde || hasta) arr = arr.filter(f => between(f.fecha||'', desde, hasta));
+
+ arr.sort((a,b)=> (a.fecha + (a.numero||'')).localeCompare(b.fecha + (b.numero||'')));
+ const total = arr.reduce((s,f)=> s + (Number(f.monto)||0), 0);
+ return {rows: arr, total};
+}
+function exportFacturasPDFPorTecnica(){
+ const cfg = load(K.CFG, {});
+ const empId = byId('vc_emp').value;
+ const tecnicaTxt = empId ? (empName(empId) || '—') : 'Todas';
+ const {desde, hasta} = getRangoActual();
+ const {rows, total} = facturasFiltradasPorTecnicaYRango();
+
+ const fontFamily = getComputedStyle(document.documentElement).getPropertyValue('--font') || 'Arial, sans-serif';
+ const html = `
+ <html><head><meta charset="utf-8"><title>Facturas por Técnica</title>
+ <style>
+   body{font-family:${fontFamily}; padding:22px}
+   h1,h2,h3{margin:0 0 6px 0}
+   .muted{color:#555}
+   table{width:100%; border-collapse:collapse; margin-top:10px; font-size:12px}
+   th,td{border:1px solid #ddd; padding:6px}
+   th{background:#f7f7f7; text-align:left}
+   .right{text-align:right}
+   .tot{margin-top:12px; font-size:14px; font-weight:700; text-align:right}
+   .meta{margin:6px 0 12px 0}
+ </style></head><body>
+   <h2>${(cfg.name)||'Salon Pro'} — Facturas por Técnica</h2>
+   <div class="meta muted">
+     <div><b>Técnica:</b> ${tecnicaTxt}</div>
+     <div><b>Rango:</b> ${(desde||'—')} a ${(hasta||'—')}</div>
+     <div><b>Generado:</b> ${new Date().toLocaleString('es-PR')}</div>
+     <div><b>Registros:</b> ${rows.length}</div>
+   </div>
+
+   <table>
+     <thead>
+       <tr>
+         <th>Fecha</th>
+         <th>Nº</th>
+         <th>Técnica</th>
+         <th>Cliente</th>
+         <th>Servicio</th>
+         <th>Método</th>
+         <th class="right">Monto</th>
+       </tr>
+     </thead>
+     <tbody>
+       ${rows.map(f => `
+         <tr>
+           <td>${f.fecha||''}</td>
+           <td>${f.numero||''}</td>
+           <td>${f.emp ? (empName(f.emp)||'') : (f.tecnicaNombre||'')}</td>
+           <td>${f.cliente||''}</td>
+           <td>${f.servicio||''}</td>
+           <td>${f.metodo||''}</td>
+           <td class="right">${(Number(f.monto)||0).toFixed(2)}</td>
+         </tr>
+       `).join('')}
+     </tbody>
+   </table>
+
+   <h3 class="tot">TOTAL GENERAL: ${ (Number(total)||0).toLocaleString('es-PR',{style:'currency',currency:'USD'}) }</h3>
+ </body></html>`;
+ const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.focus(); w.print();
+}
+function exportFacturasExcel(){
+ // Export simple en CSV (compatible Excel). Si quieres SheetJS, puedo añadírtelo luego.
+ const {rows, total} = facturasFiltradasPorTecnicaYRango();
+ let csv = 'Fecha,Número,Técnica,Cliente,Servicio,Método,Monto\n';
+ rows.forEach(f=>{
+   csv += `${f.fecha||''},${f.numero||''},"${(f.emp ? (empName(f.emp)||'') : (f.tecnicaNombre||'')).replace(/"/g,'""')}",`+
+          `"${(f.cliente||'').replace(/"/g,'""')}","${(f.servicio||'').replace(/"/g,'""')}",${f.metodo||''},${Number(f.monto||0).toFixed(2)}\n`;
+ });
+ csv += `,,,,,TOTAL,${Number(total||0).toFixed(2)}\n`;
+ download(`FACTURAS_${todayISO()}.csv`, csv, 'text/csv');
+}
+
+/* =============== WhatsApp masivo =============== */
 function visorWABulk(){
  const list = citasFiltradas();
  const linksDiv=byId('waLinks'); linksDiv.innerHTML='';
@@ -454,7 +568,7 @@ function visorWABulk(){
  });
  byId('waModal').classList.remove('hidden');
 }
-  
+
 /* =============== SUPLIDORES =============== */
 function supAdd(){
  const prov=byId('sup_prov').value.trim();
@@ -528,3 +642,103 @@ function fileToDataURL(file){
    const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(file);
  });
 }
+async function onLogoChanged(e){
+ const f=e.target.files?.[0]; if(!f) return;
+ const cfg=load(K.CFG,{});
+ cfg.logo = await fileToDataURL(f);
+ save(K.CFG,cfg); applyBrand();
+}
+async function onBGChanged(e){
+ const f=e.target.files?.[0]; if(!f) return;
+ const cfg=load(K.CFG,{});
+ cfg.bg = await fileToDataURL(f);
+ save(K.CFG,cfg); applyBrand();
+}
+function onCfgSaveColors(){
+ const cfg=load(K.CFG,{});
+ cfg.name = byId('cfg_name').value || cfg.name;
+ cfg.sub  = byId('cfg_sub').value || 'Visor de Citas';
+ cfg.primary = byId('cfg_primary').value || cfg.primary;
+ cfg.accent  = byId('cfg_accent').value  || cfg.accent;
+ cfg.bgOpacity = Math.max(0.6, Math.min(1, +byId('cfg_bg_op').value||1));
+ save(K.CFG,cfg); applyBrand();
+}
+
+/* =============== BACKUP/RESTORE =============== */
+function exportBackup(){
+ const out = {
+   cfg: load(K.CFG,{}),
+   empleados: load(K.EMP,[]),
+   citas: load(K.CITAS,[]),
+   suplidores: load(K.SUP,[]),
+   facturas: load(K.FACTS,[])
+ };
+ download(`backup_salonpro_${Date.now()}.json`, JSON.stringify(out,null,2), 'application/json');
+}
+function importBackup(file){
+ const r=new FileReader();
+ r.onload=()=>{
+   try{
+     const data=JSON.parse(r.result);
+     if(data.cfg) save(K.CFG,data.cfg);
+     if(data.empleados) save(K.EMP,data.empleados);
+     if(data.citas) save(K.CITAS,data.citas);
+     if(data.suplidores) save(K.SUP,data.suplidores);
+     if(data.facturas) save(K.FACTS,data.facturas);
+     applyBrand(); renderEmpSelect(); renderCitas(); renderSup();
+     alert('Backup restaurado.');
+   }catch(e){ alert('Archivo inválido.'); }
+ };
+ r.readAsText(file);
+}
+
+/* =============== INIT / LISTENERS =============== */
+function init(){
+ applyBrand();
+ renderEmpSelect();
+ renderCitas();
+ renderSup();
+
+ // Tabs
+ $$('.tab').forEach(b=> b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
+
+ // Acciones Citas
+ byId('vc_aplicar').addEventListener('click', renderCitas);
+ byId('vc_limpiar').addEventListener('click', ()=>{
+   byId('vc_nombre').value=''; byId('vc_emp').value=''; byId('vc_desde').value=''; byId('vc_hasta').value='';
+   renderCitas();
+ });
+ byId('vc_csv').addEventListener('click', visorCSV);
+ byId('vc_pdf').addEventListener('click', visorPDF);
+ byId('vc_wa_bulk').addEventListener('click', visorWABulk);
+ byId('waClose').addEventListener('click', ()=>byId('waModal').classList.add('hidden'));
+
+ // Facturas (PDF/Excel) — con TOTAL GENERAL
+ byId('fac_pdf_total').addEventListener('click', exportFacturasPDFPorTecnica);
+ byId('fac_excel_total').addEventListener('click', exportFacturasExcel);
+
+ // Suplidores
+ byId('sup_add').addEventListener('click', supAdd);
+ byId('sup_csv').addEventListener('click', supCSV);
+ byId('sup_pdf').addEventListener('click', supPDF);
+
+ // Print
+ byId('btnPrint').addEventListener('click', ()=>window.print());
+
+ // Config
+ byId('cfg_logo').addEventListener('change', onLogoChanged);
+ byId('cfg_bg').addEventListener('change', onBGChanged);
+ byId('cfg_primary').addEventListener('change', onCfgSaveColors);
+ byId('cfg_accent').addEventListener('change', onCfgSaveColors);
+ byId('cfg_bg_op').addEventListener('change', onCfgSaveColors);
+ byId('cfg_name').addEventListener('change', onCfgSaveColors);
+ byId('cfg_sub').addEventListener('change', onCfgSaveColors);
+
+ // Backup
+ byId('bk_export').addEventListener('click', exportBackup);
+ byId('bk_import').addEventListener('change', e=> e.target.files[0] && importBackup(e.target.files[0]));
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
